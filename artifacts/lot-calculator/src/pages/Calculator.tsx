@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { Copy, RefreshCw, Send } from "lucide-react";
-import { saveEntry } from "@/lib/journal";
+import { useCreateTrade, getListTradesQueryKey } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 
 const PAIRS = [
@@ -92,6 +93,8 @@ export default function Calculator() {
   const [pipOverride, setPipOverride] = useState("");
   const [result, setResult] = useState<Result | null>(null);
   const [copied, setCopied] = useState(false);
+  const createTrade = useCreateTrade();
+  const queryClient = useQueryClient();
 
   const isCustom = PAIRS[selectedPair].label === "Custom";
 
@@ -187,24 +190,31 @@ Balance: $${result.balUSD.toFixed(2)} / ₦${fmt(result.balNGN.toFixed(0))}
 
   const logTrade = () => {
     if (!result) return;
-    saveEntry({
-      id: crypto.randomUUID(),
-      date: new Date().toISOString(),
-      pair: result.pair,
-      direction: result.direction as "buy" | "sell",
-      lotSize: result.lotSize,
-      slPips: result.slPips,
-      tpPips: result.tpPips || null,
-      riskUSD: result.riskUSD,
-      riskNGN: result.riskNGN,
-      rr: result.rr,
-      outcome: null,
-      pnlUSD: null,
-      pnlNGN: null,
-      notes: "",
-      usdRate: parseFloat(usdRate) || 1600,
-    });
-    toast({ title: "Trade logged to journal", description: `${result.pair} ${result.direction.toUpperCase()} saved` });
+    createTrade.mutate(
+      {
+        data: {
+          pair: result.pair,
+          direction: result.direction,
+          lotSize: result.lotSize,
+          slPips: result.slPips,
+          tpPips: result.tpPips || null,
+          riskUSD: result.riskUSD,
+          riskNGN: result.riskNGN,
+          usdRate: parseFloat(usdRate) || 1600,
+          rr: result.rr,
+          notes: "",
+        },
+      },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListTradesQueryKey() });
+          toast({ title: "Trade logged to journal", description: `${result.pair} ${result.direction.toUpperCase()} saved` });
+        },
+        onError: () => {
+          toast({ title: "Failed to log trade", variant: "destructive" });
+        },
+      }
+    );
   };
 
   const riskColor =
@@ -421,10 +431,11 @@ Balance: $${result.balUSD.toFixed(2)} / ₦${fmt(result.balNGN.toFixed(0))}
             <button
               data-testid="btn-log-trade"
               onClick={logTrade}
-              className="flex-1 bg-green-500/15 border border-green-500/40 hover:bg-green-500/25 text-green-400 rounded-lg py-2 text-sm flex items-center justify-center gap-1.5 transition-colors"
+              disabled={createTrade.isPending}
+              className="flex-1 bg-green-500/15 border border-green-500/40 hover:bg-green-500/25 text-green-400 rounded-lg py-2 text-sm flex items-center justify-center gap-1.5 transition-colors disabled:opacity-60"
             >
               <Send size={13} />
-              Log Trade
+              {createTrade.isPending ? "Saving..." : "Log Trade"}
             </button>
           </div>
         </div>

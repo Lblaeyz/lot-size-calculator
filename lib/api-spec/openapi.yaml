@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: journal
+    description: Trade journal operations
 paths:
   /healthz:
     get:
@@ -24,6 +26,77 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /journal/trades:
+    get:
+      operationId: listTrades
+      tags: [journal]
+      summary: List all trades
+      responses:
+        "200":
+          description: List of trades
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Trade"
+    post:
+      operationId: createTrade
+      tags: [journal]
+      summary: Log a new trade
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TradeInput"
+      responses:
+        "201":
+          description: Trade created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Trade"
+  /journal/trades/{id}:
+    patch:
+      operationId: updateTrade
+      tags: [journal]
+      summary: Update a trade (close it, set outcome/pnl/notes)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TradeUpdate"
+      responses:
+        "200":
+          description: Updated trade
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Trade"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteTrade
+      tags: [journal]
+      summary: Delete a trade
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
 components:
   schemas:
     HealthStatus:
@@ -33,4 +106,43 @@ components:
           type: string
       required:
         - status
-
+    Trade:
+      type: object
+      required: [id, pair, direction, lotSize, slPips, riskUSD, riskNGN, usdRate, notes, createdAt]
+      properties:
+        id:        { type: integer }
+        pair:      { type: string }
+        direction: { type: string }
+        lotSize:   { type: number }
+        slPips:    { type: number }
+        tpPips:    { type: ["number", "null"] }
+        riskUSD:   { type: number }
+        riskNGN:   { type: number }
+        usdRate:   { type: number }
+        rr:        { type: ["string", "null"] }
+        outcome:   { type: ["string", "null"] }
+        pnlUSD:    { type: ["number", "null"] }
+        pnlNGN:    { type: ["number", "null"] }
+        notes:     { type: string }
+        createdAt: { type: string }
+    TradeInput:
+      type: object
+      required: [pair, direction, lotSize, slPips, riskUSD, riskNGN, usdRate]
+      properties:
+        pair:      { type: string }
+        direction: { type: string }
+        lotSize:   { type: number }
+        slPips:    { type: number }
+        tpPips:    { type: ["number", "null"] }
+        riskUSD:   { type: number }
+        riskNGN:   { type: number }
+        usdRate:   { type: number }
+        rr:        { type: ["string", "null"] }
+        notes:     { type: string }
+    TradeUpdate:
+      type: object
+      properties:
+        outcome: { type: ["string", "null"] }
+        pnlUSD:  { type: ["number", "null"] }
+        pnlNGN:  { type: ["number", "null"] }
+        notes:   { type: string }

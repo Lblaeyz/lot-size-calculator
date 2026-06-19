@@ -1,6 +1,13 @@
-import { useState, useEffect } from "react";
-import { Trash2, Edit3, CheckCircle, XCircle, MinusCircle, TrendingUp, TrendingDown } from "lucide-react";
-import { getEntries, deleteEntry, updateEntry, getStats, TradeEntry } from "@/lib/journal";
+import { useState } from "react";
+import { Trash2, Edit3, TrendingUp, TrendingDown, MinusCircle, RefreshCw } from "lucide-react";
+import {
+  useListTrades,
+  useUpdateTrade,
+  useDeleteTrade,
+  getListTradesQueryKey,
+} from "@workspace/api-client-react";
+import type { Trade } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 
 function fmt(n: number): string {
@@ -14,33 +21,53 @@ function timeAgo(iso: string) {
   if (mins < 60) return `${mins}m ago`;
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  return `${days}d ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+function getStats(entries: Trade[]) {
+  const closed = entries.filter((e) => e.outcome !== null);
+  const wins = closed.filter((e) => e.outcome === "win");
+  const losses = closed.filter((e) => e.outcome === "loss");
+  const totalPnlUSD = closed.reduce((s, e) => s + (e.pnlUSD ?? 0), 0);
+  const totalPnlNGN = closed.reduce((s, e) => s + (e.pnlNGN ?? 0), 0);
+  const winRate = closed.length > 0 ? (wins.length / closed.length) * 100 : 0;
+  return { closed: closed.length, wins: wins.length, losses: losses.length, totalPnlUSD, totalPnlNGN, winRate };
 }
 
 interface CloseModalProps {
-  entry: TradeEntry;
+  entry: Trade;
   onClose: () => void;
-  onSave: () => void;
 }
 
-function CloseModal({ entry, onClose, onSave }: CloseModalProps) {
+function CloseModal({ entry, onClose }: CloseModalProps) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const updateTrade = useUpdateTrade();
   const [outcome, setOutcome] = useState<"win" | "loss" | "breakeven">("win");
   const [pnlUSD, setPnlUSD] = useState("");
   const [notes, setNotes] = useState(entry.notes);
 
   const save = () => {
     const pnl = parseFloat(pnlUSD);
-    updateEntry(entry.id, {
-      outcome,
-      pnlUSD: isNaN(pnl) ? null : (outcome === "loss" ? -Math.abs(pnl) : Math.abs(pnl)),
-      pnlNGN: isNaN(pnl) ? null : (outcome === "loss" ? -Math.abs(pnl) : Math.abs(pnl)) * entry.usdRate,
-      notes,
-    });
-    toast({ title: "Trade closed", description: `${entry.pair} marked as ${outcome}` });
-    onSave();
-    onClose();
+    const signedPnl = isNaN(pnl) ? null : outcome === "loss" ? -Math.abs(pnl) : Math.abs(pnl);
+    updateTrade.mutate(
+      {
+        id: entry.id,
+        data: {
+          outcome,
+          pnlUSD: signedPnl,
+          pnlNGN: signedPnl != null ? signedPnl * entry.usdRate : null,
+          notes,
+        },
+      },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListTradesQueryKey() });
+          toast({ title: "Trade closed", description: `${entry.pair} marked as ${outcome}` });
+          onClose();
+        },
+      }
+    );
   };
 
   return (
@@ -49,7 +76,9 @@ function CloseModal({ entry, onClose, onSave }: CloseModalProps) {
         className="w-full max-w-[480px] bg-card border border-border rounded-2xl p-4 animate-in slide-in-from-bottom-4 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="text-[11px] text-primary font-semibold font-mono mb-3">Close Trade: {entry.pair} {entry.direction.toUpperCase()}</div>
+        <div className="text-[11px] text-primary font-semibold font-mono mb-3">
+          Close Trade: {entry.pair} {entry.direction.toUpperCase()}
+        </div>
 
         <div className="mb-3">
           <div className="text-[11px] text-muted-foreground font-mono uppercase tracking-wide mb-1.5">Outcome</div>
@@ -116,9 +145,10 @@ function CloseModal({ entry, onClose, onSave }: CloseModalProps) {
           <button
             data-testid="btn-save-close"
             onClick={save}
-            className="flex-1 bg-primary text-white rounded-lg py-2.5 text-sm font-semibold transition-colors hover:bg-primary/90"
+            disabled={updateTrade.isPending}
+            className="flex-1 bg-primary text-white rounded-lg py-2.5 text-sm font-semibold transition-colors hover:bg-primary/90 disabled:opacity-60"
           >
-            Save
+            {updateTrade.isPending ? "Saving..." : "Save"}
           </button>
         </div>
       </div>
@@ -128,13 +158,11 @@ function CloseModal({ entry, onClose, onSave }: CloseModalProps) {
 
 export default function Journal() {
   const { toast } = useToast();
-  const [entries, setEntries] = useState<TradeEntry[]>([]);
-  const [closeTarget, setCloseTarget] = useState<TradeEntry | null>(null);
+  const queryClient = useQueryClient();
+  const { data: entries = [], isLoading, isError } = useListTrades();
+  const deleteTrade = useDeleteTrade();
+  const [closeTarget, setCloseTarget] = useState<Trade | null>(null);
   const [filter, setFilter] = useState<"all" | "open" | "win" | "loss">("all");
-
-  const refresh = () => setEntries(getEntries());
-
-  useEffect(() => { refresh(); }, []);
 
   const stats = getStats(entries);
 
@@ -145,11 +173,35 @@ export default function Journal() {
     return true;
   });
 
-  const remove = (id: string) => {
-    deleteEntry(id);
-    refresh();
-    toast({ title: "Trade removed" });
+  const remove = (id: number) => {
+    deleteTrade.mutate(
+      { id },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListTradesQueryKey() });
+          toast({ title: "Trade removed" });
+        },
+      }
+    );
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 gap-2 text-muted-foreground">
+        <RefreshCw size={18} className="animate-spin" />
+        <span className="text-sm">Loading journal...</span>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+        <div className="text-4xl mb-3">⚠️</div>
+        <div className="text-sm text-red-400">Couldn't load journal. Check your connection.</div>
+      </div>
+    );
+  }
 
   if (entries.length === 0) {
     return (
@@ -168,32 +220,43 @@ export default function Journal() {
       {/* Stats */}
       <div className="grid grid-cols-3 gap-2">
         <StatCard label="Win Rate" value={`${stats.winRate.toFixed(0)}%`} color="text-green-400" />
-        <StatCard label="Total P&L" value={`$${stats.totalPnlUSD >= 0 ? "" : ""}${stats.totalPnlUSD.toFixed(0)}`} color={stats.totalPnlUSD >= 0 ? "text-green-400" : "text-red-400"} />
+        <StatCard
+          label="Total P&L"
+          value={`${stats.totalPnlUSD >= 0 ? "+" : ""}$${stats.totalPnlUSD.toFixed(0)}`}
+          color={stats.totalPnlUSD >= 0 ? "text-green-400" : "text-red-400"}
+        />
         <StatCard label="Trades" value={`${stats.wins}W / ${stats.losses}L`} color="text-primary" />
       </div>
 
-      {/* Total in Naira */}
       {stats.closed > 0 && (
-        <div className={`text-center text-[11px] font-mono py-1.5 rounded-lg border ${stats.totalPnlNGN >= 0 ? "border-green-500/30 bg-green-500/10 text-green-400" : "border-red-500/30 bg-red-500/10 text-red-400"}`}>
+        <div
+          className={`text-center text-[11px] font-mono py-1.5 rounded-lg border ${
+            stats.totalPnlNGN >= 0
+              ? "border-green-500/30 bg-green-500/10 text-green-400"
+              : "border-red-500/30 bg-red-500/10 text-red-400"
+          }`}
+        >
           Net P&L: ₦{fmt(stats.totalPnlNGN.toFixed(0))}
         </div>
       )}
 
       {/* Filter */}
-      <div className="flex gap-1.5">
+      <div className="flex gap-1.5 items-center">
         {(["all", "open", "win", "loss"] as const).map((f) => (
           <button
             key={f}
             data-testid={`filter-${f}`}
             onClick={() => setFilter(f)}
             className={`px-3 py-1 rounded-lg text-xs font-mono border transition-colors ${
-              filter === f ? "bg-primary border-primary text-white" : "bg-background border-border text-muted-foreground hover:text-foreground"
+              filter === f
+                ? "bg-primary border-primary text-white"
+                : "bg-background border-border text-muted-foreground hover:text-foreground"
             }`}
           >
             {f.charAt(0).toUpperCase() + f.slice(1)}
           </button>
         ))}
-        <div className="ml-auto text-[11px] text-muted-foreground self-center font-mono">{filtered.length} trades</div>
+        <div className="ml-auto text-[11px] text-muted-foreground font-mono">{filtered.length} trades</div>
       </div>
 
       {/* Entries */}
@@ -208,13 +271,7 @@ export default function Journal() {
         ))}
       </div>
 
-      {closeTarget && (
-        <CloseModal
-          entry={closeTarget}
-          onClose={() => setCloseTarget(null)}
-          onSave={refresh}
-        />
-      )}
+      {closeTarget && <CloseModal entry={closeTarget} onClose={() => setCloseTarget(null)} />}
     </div>
   );
 }
@@ -228,38 +285,50 @@ function StatCard({ label, value, color }: { label: string; value: string; color
   );
 }
 
-function TradeCard({ entry, onDelete, onClose }: { entry: TradeEntry; onDelete: () => void; onClose: () => void }) {
+function TradeCard({
+  entry,
+  onDelete,
+  onClose,
+}: {
+  entry: Trade;
+  onDelete: () => void;
+  onClose: () => void;
+}) {
   const isOpen = entry.outcome === null;
   const isWin = entry.outcome === "win";
   const isLoss = entry.outcome === "loss";
 
   return (
-    <div className={`bg-secondary border rounded-xl p-3 transition-colors ${
-      isOpen ? "border-border" : isWin ? "border-green-500/30" : isLoss ? "border-red-500/30" : "border-yellow-500/30"
-    }`}
+    <div
       data-testid={`trade-card-${entry.id}`}
+      className={`bg-secondary border rounded-xl p-3 ${
+        isOpen ? "border-border" : isWin ? "border-green-500/30" : isLoss ? "border-red-500/30" : "border-yellow-500/30"
+      }`}
     >
       <div className="flex items-start justify-between mb-2">
         <div>
-          <div className="flex items-center gap-2">
-            <span className="font-mono font-bold text-sm text-foreground">{entry.pair}</span>
-            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded font-mono ${
-              entry.direction === "buy" ? "bg-green-500/15 text-green-400" : "bg-red-500/15 text-red-400"
-            }`}>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-mono font-bold text-sm">{entry.pair}</span>
+            <span
+              className={`text-[10px] font-medium px-1.5 py-0.5 rounded font-mono ${
+                entry.direction === "buy" ? "bg-green-500/15 text-green-400" : "bg-red-500/15 text-red-400"
+              }`}
+            >
               {entry.direction.toUpperCase()}
             </span>
-            {!isOpen && (
-              <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
-                isWin ? "bg-green-500/15 text-green-400" : isLoss ? "bg-red-500/15 text-red-400" : "bg-yellow-500/15 text-yellow-400"
-              }`}>
+            {isOpen ? (
+              <span className="text-[10px] px-1.5 py-0.5 rounded font-mono bg-primary/15 text-primary">OPEN</span>
+            ) : (
+              <span
+                className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
+                  isWin ? "bg-green-500/15 text-green-400" : isLoss ? "bg-red-500/15 text-red-400" : "bg-yellow-500/15 text-yellow-400"
+                }`}
+              >
                 {entry.outcome === "win" ? "WIN" : entry.outcome === "loss" ? "LOSS" : "B/E"}
               </span>
             )}
-            {isOpen && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded font-mono bg-primary/15 text-primary">OPEN</span>
-            )}
           </div>
-          <div className="text-[11px] text-muted-foreground font-mono mt-0.5">{timeAgo(entry.date)}</div>
+          <div className="text-[11px] text-muted-foreground font-mono mt-0.5">{timeAgo(entry.createdAt)}</div>
         </div>
         <div className="flex items-center gap-1">
           {isOpen && (
@@ -292,7 +361,11 @@ function TradeCard({ entry, onDelete, onClose }: { entry: TradeEntry; onDelete: 
       </div>
 
       {entry.pnlUSD != null && (
-        <div className={`flex items-center gap-1.5 mt-2 pt-2 border-t border-border/50 text-sm font-mono font-bold ${isWin ? "text-green-400" : isLoss ? "text-red-400" : "text-yellow-400"}`}>
+        <div
+          className={`flex items-center gap-1.5 mt-2 pt-2 border-t border-border/50 text-sm font-mono font-bold ${
+            isWin ? "text-green-400" : isLoss ? "text-red-400" : "text-yellow-400"
+          }`}
+        >
           {isWin ? <TrendingUp size={13} /> : isLoss ? <TrendingDown size={13} /> : <MinusCircle size={13} />}
           {entry.pnlUSD >= 0 ? "+" : ""}${entry.pnlUSD.toFixed(2)}
           <span className="text-[11px] text-muted-foreground font-normal ml-1">
@@ -314,7 +387,7 @@ function InfoPair({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <span className="text-muted-foreground">{label}: </span>
-      <span className="text-foreground font-mono">{value}</span>
+      <span className="font-mono">{value}</span>
     </div>
   );
 }

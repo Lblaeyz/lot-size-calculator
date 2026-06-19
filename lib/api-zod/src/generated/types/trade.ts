@@ -5,9 +5,6 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-export interface HealthStatus {
-  status: string;
-}
 
 export interface Trade {
   id: number;
@@ -31,29 +28,3 @@ export interface Trade {
   notes: string;
   createdAt: string;
 }
-
-export interface TradeInput {
-  pair: string;
-  direction: string;
-  lotSize: number;
-  slPips: number;
-  /** @nullable */
-  tpPips?: number | null;
-  riskUSD: number;
-  riskNGN: number;
-  usdRate: number;
-  /** @nullable */
-  rr?: string | null;
-  notes?: string;
-}
-
-export interface TradeUpdate {
-  /** @nullable */
-  outcome?: string | null;
-  /** @nullable */
-  pnlUSD?: number | null;
-  /** @nullable */
-  pnlNGN?: number | null;
-  notes?: string;
-}
-
