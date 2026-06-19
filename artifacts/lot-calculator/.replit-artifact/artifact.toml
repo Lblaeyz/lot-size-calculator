@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Lot Calculator"
+version = "1.0.0"
+id = "artifacts/lot-calculator"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18364
+
+[services.development]
+run = "pnpm --filter @workspace/lot-calculator run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/lot-calculator", "run", "build" ]
+publicDir = "artifacts/lot-calculator/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18364"
+BASE_PATH = "/"

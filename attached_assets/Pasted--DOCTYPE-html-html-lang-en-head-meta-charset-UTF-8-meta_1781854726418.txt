@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lot Calculator</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --tg-bg: #17212b;
+    --tg-surface: #232e3c;
+    --tg-card: #1c2733;
+    --tg-border: #2b3a4a;
+    --tg-blue: #5288c1;
+    --tg-blue-bright: #64b5f6;
+    --tg-green: #4caf7d;
+    --tg-red: #e53935;
+    --tg-yellow: #f0c040;
+    --tg-text: #e8eaed;
+    --tg-sub: #8a9ab0;
+    --tg-mono: 'JetBrains Mono', monospace;
+    --tg-sans: 'Inter', sans-serif;
+  }
+
+  body {
+    background: var(--tg-bg);
+    color: var(--tg-text);
+    font-family: var(--tg-sans);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px;
+  }
+
+  /* Bot header */
+  .bot-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--tg-surface);
+    border-bottom: 1px solid var(--tg-border);
+    padding: 10px 16px;
+    width: 100%;
+    max-width: 480px;
+    border-radius: 16px 16px 0 0;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .bot-avatar {
+    width: 38px; height: 38px;
+    background: linear-gradient(135deg, var(--tg-blue), #3a6fa8);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+
+  .bot-info { flex: 1; }
+  .bot-name { font-weight: 600; font-size: 15px; }
+  .bot-status { font-size: 11px; color: var(--tg-green); }
+
+  .chat-wrap {
+    width: 100%;
+    max-width: 480px;
+    background: var(--tg-card);
+    border: 1px solid var(--tg-border);
+    border-top: none;
+    border-radius: 0 0 16px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    overflow: hidden;
+  }
+
+  /* Chat messages */
+  .chat-body {
+    padding: 12px 12px 0 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .msg {
+    max-width: 88%;
+    padding: 9px 13px;
+    border-radius: 14px;
+    font-size: 14px;
+    line-height: 1.5;
+    position: relative;
+  }
+
+  .msg.bot {
+    background: var(--tg-surface);
+    border-radius: 4px 14px 14px 14px;
+    align-self: flex-start;
+    border: 1px solid var(--tg-border);
+  }
+
+  .msg.bot .sender {
+    font-size: 11px;
+    color: var(--tg-blue-bright);
+    font-weight: 600;
+    margin-bottom: 3px;
+  }
+
+  /* Form card inside chat */
+  .form-bubble {
+    background: var(--tg-surface);
+    border: 1px solid var(--tg-border);
+    border-radius: 4px 14px 14px 14px;
+    padding: 14px;
+    max-width: 100%;
+    align-self: flex-start;
+    width: calc(100% - 8px);
+  }
+
+  .form-bubble .sender {
+    font-size: 11px;
+    color: var(--tg-blue-bright);
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+
+  .field-group { margin-bottom: 10px; }
+
+  .field-label {
+    font-size: 11px;
+    color: var(--tg-sub);
+    margin-bottom: 4px;
+    font-family: var(--tg-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .field-row {
+    display: flex;
+    gap: 8px;
+  }
+
+  .tg-input {
+    background: var(--tg-card);
+    border: 1px solid var(--tg-border);
+    color: var(--tg-text);
+    border-radius: 8px;
+    padding: 8px 11px;
+    font-size: 14px;
+    font-family: var(--tg-mono);
+    width: 100%;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .tg-input:focus { border-color: var(--tg-blue); }
+  .tg-input::placeholder { color: var(--tg-sub); opacity: 0.7; }
+
+  .tg-select {
+    background: var(--tg-card);
+    border: 1px solid var(--tg-border);
+    color: var(--tg-text);
+    border-radius: 8px;
+    padding: 8px 11px;
+    font-size: 13px;
+    font-family: var(--tg-mono);
+    width: 100%;
+    outline: none;
+    cursor: pointer;
+    -webkit-appearance: none;
+  }
+
+  .tg-select:focus { border-color: var(--tg-blue); }
+
+  /* Inline keyboard buttons */
+  .inline-kb {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .kb-btn {
+    background: var(--tg-blue);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 7px 14px;
+    font-size: 13px;
+    font-family: var(--tg-sans);
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.08s;
+    flex: 1;
+    min-width: 90px;
+  }
+
+  .kb-btn:hover { background: #3a6fa8; }
+  .kb-btn:active { transform: scale(0.97); }
+  .kb-btn.secondary {
+    background: var(--tg-surface);
+    border: 1px solid var(--tg-border);
+    color: var(--tg-sub);
+  }
+  .kb-btn.secondary:hover { background: var(--tg-border); color: var(--tg-text); }
+
+  /* Result bubble */
+  .result-bubble {
+    background: var(--tg-surface);
+    border: 1px solid var(--tg-border);
+    border-radius: 4px 14px 14px 14px;
+    padding: 14px;
+    align-self: flex-start;
+    width: calc(100% - 8px);
+    display: none;
+  }
+
+  .result-bubble.visible { display: block; }
+
+  .result-bubble .sender {
+    font-size: 11px;
+    color: var(--tg-blue-bright);
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+
+  .result-title {
+    font-size: 13px;
+    color: var(--tg-sub);
+    margin-bottom: 10px;
+    border-bottom: 1px solid var(--tg-border);
+    padding-bottom: 8px;
+    font-family: var(--tg-mono);
+  }
+
+  .result-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 0;
+    font-size: 13px;
+    border-bottom: 1px solid rgba(43,58,74,0.5);
+  }
+
+  .result-row:last-child { border-bottom: none; }
+
+  .result-key { color: var(--tg-sub); font-size: 12px; }
+  .result-val {
+    font-family: var(--tg-mono);
+    font-weight: 600;
+    color: var(--tg-text);
+  }
+
+  .result-val.green { color: var(--tg-green); }
+  .result-val.red { color: var(--tg-red); }
+  .result-val.blue { color: var(--tg-blue-bright); }
+  .result-val.yellow { color: var(--tg-yellow); }
+
+  .result-divider {
+    height: 1px;
+    background: var(--tg-border);
+    margin: 8px 0;
+  }
+
+  .risk-bar-wrap { margin: 10px 0 4px; }
+  .risk-label { font-size: 11px; color: var(--tg-sub); margin-bottom: 4px; font-family: var(--tg-mono); }
+  .risk-bar {
+    height: 6px;
+    background: var(--tg-border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .risk-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.4s ease;
+  }
+
+  .naira-badge {
+    display: inline-block;
+    background: rgba(76,175,125,0.15);
+    color: var(--tg-green);
+    border: 1px solid rgba(76,175,125,0.3);
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-family: var(--tg-mono);
+    font-size: 11px;
+    margin-left: 6px;
+  }
+
+  /* Pair tabs */
+  .pair-tabs {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+
+  .pair-tab {
+    background: var(--tg-card);
+    border: 1px solid var(--tg-border);
+    color: var(--tg-sub);
+    border-radius: 6px;
+    padding: 4px 9px;
+    font-size: 12px;
+    font-family: var(--tg-mono);
+    cursor: pointer;
+    transition: all 0.1s;
+  }
+
+  .pair-tab.active {
+    background: var(--tg-blue);
+    border-color: var(--tg-blue);
+    color: #fff;
+  }
+
+  /* Risk % quick select */
+  .risk-quick {
+    display: flex;
+    gap: 5px;
+    margin-top: 4px;
+  }
+
+  .risk-chip {
+    background: var(--tg-card);
+    border: 1px solid var(--tg-border);
+    color: var(--tg-sub);
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-size: 12px;
+    font-family: var(--tg-mono);
+    cursor: pointer;
+    transition: all 0.1s;
+  }
+
+  .risk-chip:hover, .risk-chip.active {
+    background: rgba(82,136,193,0.2);
+    border-color: var(--tg-blue);
+    color: var(--tg-blue-bright);
+  }
+
+  /* Bottom chat input (cosmetic) */
+  .chat-input-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-top: 1px solid var(--tg-border);
+    margin-top: 4px;
+  }
+
+  .chat-input-fake {
+    flex: 1;
+    background: var(--tg-card);
+    border: 1px solid var(--tg-border);
+    border-radius: 20px;
+    padding: 8px 14px;
+    font-size: 13px;
+    color: var(--tg-sub);
+    user-select: none;
+  }
+
+  .send-btn {
+    width: 36px; height: 36px;
+    background: var(--tg-blue);
+    border: none;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .send-btn svg { fill: #fff; }
+
+  .usd-rate-note {
+    font-size: 11px;
+    color: var(--tg-sub);
+    margin-top: 4px;
+    font-family: var(--tg-mono);
+  }
+
+  .section-sep {
+    font-size: 11px;
+    color: var(--tg-sub);
+    text-align: center;
+    padding: 4px 0;
+    opacity: 0.6;
+    letter-spacing: 1px;
+  }
+</style>
+</head>
+<body>
+
+<div class="bot-header">
+  <div class="bot-avatar">📊</div>
+  <div class="bot-info">
+    <div class="bot-name">LotCalc Bot</div>
+    <div class="bot-status">● online</div>
+  </div>
+</div>
+
+<div class="chat-wrap">
+  <div class="chat-body">
+
+    <!-- Greeting -->
+    <div class="msg bot">
+      <div class="sender">LotCalc Bot</div>
+      👋 <b>Welcome!</b> I'll calculate your lot size, risk, and P&L in both USD and Naira.<br><br>
+      Fill in your trade details below 👇
+    </div>
+
+    <!-- Main form bubble -->
+    <div class="form-bubble">
+      <div class="sender">LotCalc Bot</div>
+
+      <!-- Account section -->
+      <div class="field-group">
+        <div class="field-label">💰 Account Balance</div>
+        <div class="field-row">
+          <input class="tg-input" id="balanceUSD" type="number" placeholder="USD balance" step="0.01" min="0">
+          <input class="tg-input" id="balanceNGN" type="number" placeholder="₦ Naira balance" step="1" min="0">
+        </div>
+        <div class="usd-rate-note">USD/NGN rate: <input id="usdRate" type="number" style="background:transparent;border:none;border-bottom:1px solid var(--tg-border);color:var(--tg-blue-bright);font-family:var(--tg-mono);font-size:11px;width:70px;padding:1px 4px;outline:none;" value="1600" min="1"> (edit if needed)</div>
+      </div>
+
+      <!-- Pair -->
+      <div class="field-group">
+        <div class="field-label">📈 Instrument</div>
+        <div class="pair-tabs">
+          <div class="pair-tab active" onclick="setPair(this,'EURUSD',0.0001,100000)">EURUSD</div>
+          <div class="pair-tab" onclick="setPair(this,'GBPUSD',0.0001,100000)">GBPUSD</div>
+          <div class="pair-tab" onclick="setPair(this,'USDJPY',0.01,100000)">USDJPY</div>
+          <div class="pair-tab" onclick="setPair(this,'XAUUSD',0.01,100)">XAUUSD</div>
+          <div class="pair-tab" onclick="setPair(this,'BTCUSD',1,1)">BTCUSD</div>
+          <div class="pair-tab" onclick="setPair(this,'NAS100',0.01,100)">NAS100</div>
+          <div class="pair-tab" onclick="setPair(this,'Custom',null,null)">Custom</div>
+        </div>
+        <div id="customFields" style="display:none; gap:8px; flex-direction:column;">
+          <input class="tg-input" id="customPair" type="text" placeholder="Pair name (e.g. EURJPY)">
+          <div class="field-row">
+            <input class="tg-input" id="customPipSize" type="number" placeholder="Pip size (e.g. 0.0001)" step="any">
+            <input class="tg-input" id="customContractSize" type="number" placeholder="Contract size (e.g. 100000)">
+          </div>
+        </div>
+      </div>
+
+      <!-- Risk -->
+      <div class="field-group">
+        <div class="field-label">⚡ Risk %</div>
+        <input class="tg-input" id="riskPct" type="number" placeholder="Risk %" step="0.01" min="0.01" max="100" value="1">
+        <div class="risk-quick">
+          <div class="risk-chip" onclick="setRisk(0.5)">0.5%</div>
+          <div class="risk-chip active" onclick="setRisk(1)">1%</div>
+          <div class="risk-chip" onclick="setRisk(1.5)">1.5%</div>
+          <div class="risk-chip" onclick="setRisk(2)">2%</div>
+          <div class="risk-chip" onclick="setRisk(3)">3%</div>
+        </div>
+      </div>
+
+      <!-- SL / TP -->
+      <div class="field-group">
+        <div class="field-label">🎯 Stop Loss & Take Profit (pips)</div>
+        <div class="field-row">
+          <input class="tg-input" id="slPips" type="number" placeholder="SL pips" min="0" step="0.1">
+          <input class="tg-input" id="tpPips" type="number" placeholder="TP pips" min="0" step="0.1">
+        </div>
+      </div>
+
+      <!-- Direction -->
+      <div class="field-group">
+        <div class="field-label">📍 Direction</div>
+        <select class="tg-select" id="direction">
+          <option value="buy">📈 BUY / Long</option>
+          <option value="sell">📉 SELL / Short</option>
+        </select>
+      </div>
+
+      <!-- Pip value override -->
+      <div class="field-group">
+        <div class="field-label">💵 Pip Value per Lot (USD) — optional override</div>
+        <input class="tg-input" id="pipValueOverride" type="number" placeholder="Leave blank for auto" step="any" min="0">
+      </div>
+
+      <div class="inline-kb">
+        <button class="kb-btn" onclick="calculate()">🧮 Calculate</button>
+        <button class="kb-btn secondary" onclick="resetForm()">🔄 Reset</button>
+      </div>
+    </div>
+
+    <!-- Result bubble -->
+    <div class="result-bubble" id="resultBubble">
+      <div class="sender">LotCalc Bot</div>
+      <div class="result-title" id="resultTitle">📊 EURUSD — BUY</div>
+
+      <div class="result-row">
+        <span class="result-key">Lot Size</span>
+        <span class="result-val blue" id="rLot">—</span>
+      </div>
+      <div class="result-row">
+        <span class="result-key">Risk Amount</span>
+        <span class="result-val red" id="rRiskUSD">—</span>
+      </div>
+      <div class="result-row">
+        <span class="result-key">Risk (Naira)</span>
+        <span class="result-val red" id="rRiskNGN">—</span>
+      </div>
+
+      <div class="result-divider"></div>
+
+      <div class="result-row">
+        <span class="result-key">Potential Profit (TP)</span>
+        <span class="result-val green" id="rProfitUSD">—</span>
+      </div>
+      <div class="result-row">
+        <span class="result-key">Profit (Naira)</span>
+        <span class="result-val green" id="rProfitNGN">—</span>
+      </div>
+
+      <div class="result-divider"></div>
+
+      <div class="result-row">
+        <span class="result-key">RR Ratio</span>
+        <span class="result-val yellow" id="rRR">—</span>
+      </div>
+      <div class="result-row">
+        <span class="result-key">Pip Value</span>
+        <span class="result-val" id="rPipVal">—</span>
+      </div>
+      <div class="result-row">
+        <span class="result-key">SL Pips / TP Pips</span>
+        <span class="result-val" id="rSLTP">—</span>
+      </div>
+      <div class="result-row">
+        <span class="result-key">Balance (USD / ₦)</span>
+        <span class="result-val" id="rBal">—</span>
+      </div>
+
+      <div class="risk-bar-wrap">
+        <div class="risk-label">Risk Level</div>
+        <div class="risk-bar">
+          <div class="risk-fill" id="riskFill" style="width:0%;background:var(--tg-green)"></div>
+        </div>
+      </div>
+
+      <div class="inline-kb" style="margin-top:12px;">
+        <button class="kb-btn secondary" onclick="calculate()">🔁 Recalculate</button>
+        <button class="kb-btn secondary" onclick="copyResult()">📋 Copy</button>
+      </div>
+    </div>
+
+    <div style="height:4px;"></div>
+  </div>
+
+  <div class="chat-input-bar">
+    <div class="chat-input-fake">Message LotCalc Bot...</div>
+    <button class="send-btn" onclick="calculate()">
+      <svg width="18" height="18" viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>
+    </button>
+  </div>
+</div>
+
+<script>
+  let currentPair = 'EURUSD';
+  let currentPipSize = 0.0001;
+  let currentContractSize = 100000;
+
+  const DEFAULT_PIP_VALUES = {
+    EURUSD: 10,
+    GBPUSD: 10,
+    USDJPY: 9.09,
+    XAUUSD: 10,
+    BTCUSD: 1,
+    NAS100: 1,
+  };
+
+  function setPair(el, pair, pip, contract) {
+    document.querySelectorAll('.pair-tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    currentPair = pair;
+    currentPipSize = pip;
+    currentContractSize = contract;
+    const cf = document.getElementById('customFields');
+    cf.style.display = pair === 'Custom' ? 'flex' : 'none';
+  }
+
+  function setRisk(val) {
+    document.getElementById('riskPct').value = val;
+    document.querySelectorAll('.risk-chip').forEach(c => c.classList.remove('active'));
+    event.target.classList.add('active');
+  }
+
+  function getUSDNGN() {
+    return parseFloat(document.getElementById('usdRate').value) || 1600;
+  }
+
+  function calculate() {
+    let pair = currentPair;
+    let pipSize = currentPipSize;
+    let contractSize = currentContractSize;
+
+    if (pair === 'Custom') {
+      pair = document.getElementById('customPair').value || 'Custom';
+      pipSize = parseFloat(document.getElementById('customPipSize').value);
+      contractSize = parseFloat(document.getElementById('customContractSize').value);
+      if (!pipSize || !contractSize) {
+        alert('Please fill in custom pip size and contract size.');
+        return;
+      }
+    }
+
+    const balUSD = parseFloat(document.getElementById('balanceUSD').value) || 0;
+    const balNGN = parseFloat(document.getElementById('balanceNGN').value) || 0;
+    const rate = getUSDNGN();
+    const riskPct = parseFloat(document.getElementById('riskPct').value) || 1;
+    const slPips = parseFloat(document.getElementById('slPips').value);
+    const tpPips = parseFloat(document.getElementById('tpPips').value) || 0;
+    const direction = document.getElementById('direction').value;
+
+    if (!slPips || slPips <= 0) {
+      alert('Please enter a valid Stop Loss in pips.');
+      return;
+    }
+
+    // Determine effective balance in USD
+    let effectiveBalUSD = balUSD;
+    if (!effectiveBalUSD && balNGN) {
+      effectiveBalUSD = balNGN / rate;
+    }
+
+    if (!effectiveBalUSD) {
+      alert('Please enter your account balance (USD or Naira).');
+      return;
+    }
+
+    // Effective Naira balance
+    let effectiveBalNGN = balNGN || effectiveBalUSD * rate;
+
+    // Pip value per standard lot in USD
+    let pipValuePerLot = parseFloat(document.getElementById('pipValueOverride').value);
+    if (!pipValuePerLot) {
+      pipValuePerLot = DEFAULT_PIP_VALUES[pair] || (pipSize * contractSize);
+    }
+
+    const riskUSD = (riskPct / 100) * effectiveBalUSD;
+    const lotSize = riskUSD / (slPips * pipValuePerLot);
+    const profitUSD = tpPips ? tpPips * pipValuePerLot * lotSize : null;
+    const riskNGN = riskUSD * rate;
+    const profitNGN = profitUSD ? profitUSD * rate : null;
+    const rr = tpPips ? (tpPips / slPips).toFixed(2) : null;
+
+    // Update result
+    document.getElementById('resultTitle').textContent =
+      `📊 ${pair} — ${direction.toUpperCase()}`;
+
+    document.getElementById('rLot').textContent =
+      lotSize < 0.01 ? lotSize.toFixed(4) + ' lots' : lotSize.toFixed(2) + ' lots';
+
+    document.getElementById('rRiskUSD').textContent =
+      `$${riskUSD.toFixed(2)} (${riskPct}%)`;
+
+    document.getElementById('rRiskNGN').textContent =
+      `₦${numberWithCommas(riskNGN.toFixed(0))}`;
+
+    document.getElementById('rProfitUSD').textContent =
+      profitUSD !== null ? `$${profitUSD.toFixed(2)}` : '— (no TP set)';
+
+    document.getElementById('rProfitNGN').textContent =
+      profitNGN !== null ? `₦${numberWithCommas(profitNGN.toFixed(0))}` : '—';
+
+    document.getElementById('rRR').textContent =
+      rr ? `1 : ${rr}` : '— (no TP set)';
+
+    document.getElementById('rPipVal').textContent =
+      `$${pipValuePerLot.toFixed(2)}/pip/lot`;
+
+    document.getElementById('rSLTP').textContent =
+      `${slPips} pips / ${tpPips || '—'} pips`;
+
+    document.getElementById('rBal').textContent =
+      `$${effectiveBalUSD.toFixed(2)} / ₦${numberWithCommas(effectiveBalNGN.toFixed(0))}`;
+
+    // Risk bar
+    const fill = document.getElementById('riskFill');
+    const pct = Math.min(riskPct, 10);
+    fill.style.width = (pct / 10 * 100) + '%';
+    fill.style.background = riskPct <= 1 ? 'var(--tg-green)'
+      : riskPct <= 2 ? 'var(--tg-yellow)'
+      : 'var(--tg-red)';
+
+    const bubble = document.getElementById('resultBubble');
+    bubble.classList.add('visible');
+    bubble.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function resetForm() {
+    document.getElementById('balanceUSD').value = '';
+    document.getElementById('balanceNGN').value = '';
+    document.getElementById('riskPct').value = 1;
+    document.getElementById('slPips').value = '';
+    document.getElementById('tpPips').value = '';
+    document.getElementById('pipValueOverride').value = '';
+    document.getElementById('resultBubble').classList.remove('visible');
+    document.querySelectorAll('.risk-chip').forEach(c => c.classList.remove('active'));
+    document.querySelector('.risk-chip:nth-child(2)').classList.add('active');
+  }
+
+  function copyResult() {
+    const pair = document.getElementById('resultTitle').textContent;
+    const lot = document.getElementById('rLot').textContent;
+    const risk = document.getElementById('rRiskUSD').textContent;
+    const riskN = document.getElementById('rRiskNGN').textContent;
+    const profit = document.getElementById('rProfitUSD').textContent;
+    const profitN = document.getElementById('rProfitNGN').textContent;
+    const rr = document.getElementById('rRR').textContent;
+    const sltp = document.getElementById('rSLTP').textContent;
+    const bal = document.getElementById('rBal').textContent;
+
+    const text = `${pair}
+Lot Size: ${lot}
+Risk: ${risk} | ${riskN}
+Profit: ${profit} | ${profitN}
+R:R ${rr}
+SL/TP: ${sltp}
+Balance: ${bal}
+— LotCalc Bot`;
+
+    navigator.clipboard.writeText(text).then(() => {
+      const btn = event.target;
+      btn.textContent = '✅ Copied!';
+      setTimeout(() => btn.textContent = '📋 Copy', 1800);
+    });
+  }
+
+  function numberWithCommas(x) {
+    return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
+</script>
+</body>
+</html>
