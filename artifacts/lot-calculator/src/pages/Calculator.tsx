@@ -1,6 +1,21 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Copy, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+
+const RATE_CACHE_KEY = "usdngn_rate_cache";
+const RATE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+async function fetchLiveRate(): Promise<number | null> {
+  try {
+    const res = await fetch("https://open.er-api.com/v6/latest/USD");
+    if (!res.ok) return null;
+    const data = await res.json();
+    const rate = data?.rates?.NGN;
+    return typeof rate === "number" ? Math.round(rate) : null;
+  } catch {
+    return null;
+  }
+}
 
 const PAIRS = [
   { label: "EURUSD", pip: 0.0001, contract: 100000 },
@@ -105,6 +120,30 @@ export default function Calculator() {
   const [pipOverride, setPipOverride] = useState("");
   const [result, setResult] = useState<Result | null>(null);
   const [copied, setCopied] = useState(false);
+  const [rateStatus, setRateStatus] = useState<"loading" | "live" | "cached" | "manual">("loading");
+
+  useEffect(() => {
+    const cached = localStorage.getItem(RATE_CACHE_KEY);
+    if (cached) {
+      try {
+        const { rate, ts } = JSON.parse(cached);
+        if (Date.now() - ts < RATE_TTL_MS && typeof rate === "number") {
+          setUsdRate(String(rate));
+          setRateStatus("cached");
+          return;
+        }
+      } catch { /* stale cache, fall through */ }
+    }
+    fetchLiveRate().then((rate) => {
+      if (rate) {
+        setUsdRate(String(rate));
+        setRateStatus("live");
+        localStorage.setItem(RATE_CACHE_KEY, JSON.stringify({ rate, ts: Date.now() }));
+      } else {
+        setRateStatus("manual");
+      }
+    });
+  }, []);
 
   const isCustom = PAIRS[selectedPair].label === "Custom";
 
@@ -223,16 +262,19 @@ Balance: $${result.balUSD.toFixed(2)} / ₦${fmt(result.balNGN.toFixed(0))}
             <TgInput id="input-balance-usd" placeholder="USD balance" value={balUSD} onChange={setBalUSD} />
             <TgInput id="input-balance-ngn" placeholder="₦ Naira balance" value={balNGN} onChange={setBalNGN} />
           </div>
-          <div className="text-[11px] text-muted-foreground mt-1 font-mono flex items-center gap-1">
+          <div className="text-[11px] text-muted-foreground mt-1 font-mono flex items-center gap-1 flex-wrap">
             USD/NGN rate:
             <input
               data-testid="input-usd-rate"
               type="number"
               value={usdRate}
-              onChange={(e) => setUsdRate(e.target.value)}
-              className="bg-transparent border-b border-border text-primary font-mono text-[11px] w-16 px-1 outline-none"
+              onChange={(e) => { setUsdRate(e.target.value); setRateStatus("manual"); }}
+              className="bg-transparent border-b border-border text-primary font-mono text-[11px] w-20 px-1 outline-none"
             />
-            (edit if needed)
+            {rateStatus === "loading" && <span className="text-muted-foreground">fetching…</span>}
+            {rateStatus === "live" && <span className="text-green-400">● live</span>}
+            {rateStatus === "cached" && <span className="text-yellow-400">● cached</span>}
+            {rateStatus === "manual" && <span className="text-muted-foreground">(manual)</span>}
           </div>
         </FieldGroup>
 
