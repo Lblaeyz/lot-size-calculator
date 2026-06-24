@@ -1,7 +1,5 @@
 import { useState, useCallback } from "react";
-import { Copy, RefreshCw, Send } from "lucide-react";
-import { useCreateTrade, getListTradesQueryKey } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { Copy, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const PAIRS = [
@@ -46,34 +44,48 @@ function fmt(n: number): string {
   return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
-function Input({
+function TgInput({
   id,
   placeholder,
   value,
   onChange,
   type = "number",
-  step = "any",
-  className = "",
 }: {
   id?: string;
   placeholder: string;
   value: string;
   onChange: (v: string) => void;
   type?: string;
-  step?: string;
-  className?: string;
 }) {
   return (
     <input
       data-testid={id}
       id={id}
       type={type}
-      step={step}
+      step="any"
       placeholder={placeholder}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className={`w-full bg-background border border-border rounded-lg px-3 py-2 text-sm font-mono text-foreground placeholder-muted-foreground outline-none focus:border-primary transition-colors ${className}`}
+      className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm font-mono text-foreground placeholder-muted-foreground outline-none focus:border-primary transition-colors"
     />
+  );
+}
+
+function FieldGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="mb-3">
+      <div className="text-[11px] text-muted-foreground font-mono uppercase tracking-wide mb-1.5">{label}</div>
+      {children}
+    </div>
+  );
+}
+
+function ResultRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex justify-between items-center py-1.5 border-b border-border/40 last:border-0 text-sm">
+      <span className="text-muted-foreground text-[12px]">{label}</span>
+      {children}
+    </div>
   );
 }
 
@@ -93,8 +105,6 @@ export default function Calculator() {
   const [pipOverride, setPipOverride] = useState("");
   const [result, setResult] = useState<Result | null>(null);
   const [copied, setCopied] = useState(false);
-  const createTrade = useCreateTrade();
-  const queryClient = useQueryClient();
 
   const isCustom = PAIRS[selectedPair].label === "Custom";
 
@@ -188,47 +198,20 @@ Balance: $${result.balUSD.toFixed(2)} / ₦${fmt(result.balNGN.toFixed(0))}
     });
   };
 
-  const logTrade = () => {
-    if (!result) return;
-    createTrade.mutate(
-      {
-        data: {
-          pair: result.pair,
-          direction: result.direction,
-          lotSize: result.lotSize,
-          slPips: result.slPips,
-          tpPips: result.tpPips || null,
-          riskUSD: result.riskUSD,
-          riskNGN: result.riskNGN,
-          usdRate: parseFloat(usdRate) || 1600,
-          rr: result.rr,
-          notes: "",
-        },
-      },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getListTradesQueryKey() });
-          toast({ title: "Trade logged to journal", description: `${result.pair} ${result.direction.toUpperCase()} saved` });
-        },
-        onError: () => {
-          toast({ title: "Failed to log trade", variant: "destructive" });
-        },
-      }
-    );
-  };
-
   const riskColor =
     parseFloat(riskPct) <= 1 ? "bg-green-500" : parseFloat(riskPct) <= 2 ? "bg-yellow-400" : "bg-red-500";
-
   const riskBarWidth = `${Math.min((parseFloat(riskPct) || 0) / 10 * 100, 100)}%`;
 
   return (
-    <div className="flex flex-col gap-1.5 p-3">
+    <div className="flex flex-col gap-1.5 p-3 pb-4">
       {/* Greeting */}
-      <BotBubble>
-        <b>Welcome!</b> I'll calculate your lot size, risk, and P&amp;L in both USD and Naira.
-        <br /><br />Fill in your trade details below 👇
-      </BotBubble>
+      <div className="bg-secondary border border-border rounded-tl rounded-tr-2xl rounded-br-2xl rounded-bl-2xl px-3.5 py-2.5 max-w-[88%] self-start">
+        <div className="text-[11px] text-primary font-semibold mb-1 font-mono">LotCalc Bot</div>
+        <div className="text-sm leading-relaxed">
+          <b>Welcome!</b> I'll calculate your lot size, risk, and P&amp;L in both USD and Naira.
+          <br /><br />Fill in your trade details below 👇
+        </div>
+      </div>
 
       {/* Form bubble */}
       <div className="bg-secondary border border-border rounded-tl rounded-tr-2xl rounded-br-2xl rounded-bl-2xl p-3.5 w-[calc(100%-8px)] self-start">
@@ -237,8 +220,8 @@ Balance: $${result.balUSD.toFixed(2)} / ₦${fmt(result.balNGN.toFixed(0))}
         {/* Balance */}
         <FieldGroup label="💰 Account Balance">
           <div className="flex gap-2">
-            <Input id="input-balance-usd" placeholder="USD balance" value={balUSD} onChange={setBalUSD} />
-            <Input id="input-balance-ngn" placeholder="₦ Naira balance" value={balNGN} onChange={setBalNGN} />
+            <TgInput id="input-balance-usd" placeholder="USD balance" value={balUSD} onChange={setBalUSD} />
+            <TgInput id="input-balance-ngn" placeholder="₦ Naira balance" value={balNGN} onChange={setBalNGN} />
           </div>
           <div className="text-[11px] text-muted-foreground mt-1 font-mono flex items-center gap-1">
             USD/NGN rate:
@@ -273,10 +256,10 @@ Balance: $${result.balUSD.toFixed(2)} / ₦${fmt(result.balNGN.toFixed(0))}
           </div>
           {isCustom && (
             <div className="flex flex-col gap-2">
-              <Input id="input-custom-pair" placeholder="Pair name (e.g. EURJPY)" value={customPair} onChange={setCustomPair} type="text" />
+              <TgInput id="input-custom-pair" placeholder="Pair name (e.g. EURJPY)" value={customPair} onChange={setCustomPair} type="text" />
               <div className="flex gap-2">
-                <Input id="input-custom-pip" placeholder="Pip size (e.g. 0.0001)" value={customPip} onChange={setCustomPip} />
-                <Input id="input-custom-contract" placeholder="Contract size (e.g. 100000)" value={customContract} onChange={setCustomContract} />
+                <TgInput id="input-custom-pip" placeholder="Pip size (e.g. 0.0001)" value={customPip} onChange={setCustomPip} />
+                <TgInput id="input-custom-contract" placeholder="Contract size (e.g. 100000)" value={customContract} onChange={setCustomContract} />
               </div>
             </div>
           )}
@@ -284,7 +267,7 @@ Balance: $${result.balUSD.toFixed(2)} / ₦${fmt(result.balNGN.toFixed(0))}
 
         {/* Risk % */}
         <FieldGroup label="⚡ Risk %">
-          <Input id="input-risk-pct" placeholder="Risk %" value={riskPct} onChange={setRiskPct} />
+          <TgInput id="input-risk-pct" placeholder="Risk %" value={riskPct} onChange={setRiskPct} />
           <div className="flex gap-1.5 mt-1.5">
             {RISK_CHIPS.map((r) => (
               <button
@@ -306,8 +289,8 @@ Balance: $${result.balUSD.toFixed(2)} / ₦${fmt(result.balNGN.toFixed(0))}
         {/* SL / TP */}
         <FieldGroup label="🎯 Stop Loss & Take Profit (pips)">
           <div className="flex gap-2">
-            <Input id="input-sl-pips" placeholder="SL pips" value={slPips} onChange={setSlPips} />
-            <Input id="input-tp-pips" placeholder="TP pips" value={tpPips} onChange={setTpPips} />
+            <TgInput id="input-sl-pips" placeholder="SL pips" value={slPips} onChange={setSlPips} />
+            <TgInput id="input-tp-pips" placeholder="TP pips" value={tpPips} onChange={setTpPips} />
           </div>
         </FieldGroup>
 
@@ -335,7 +318,7 @@ Balance: $${result.balUSD.toFixed(2)} / ₦${fmt(result.balNGN.toFixed(0))}
 
         {/* Pip override */}
         <FieldGroup label="💵 Pip Value per Lot (USD) — optional override">
-          <Input id="input-pip-override" placeholder="Leave blank for auto" value={pipOverride} onChange={setPipOverride} />
+          <TgInput id="input-pip-override" placeholder="Leave blank for auto" value={pipOverride} onChange={setPipOverride} />
         </FieldGroup>
 
         <div className="flex gap-2 mt-1">
@@ -419,68 +402,18 @@ Balance: $${result.balUSD.toFixed(2)} / ₦${fmt(result.balNGN.toFixed(0))}
             </div>
           </div>
 
-          <div className="flex gap-2 mt-3">
+          <div className="mt-3">
             <button
               data-testid="btn-copy"
               onClick={copyResult}
-              className="flex-1 bg-secondary border border-border hover:bg-accent text-muted-foreground hover:text-foreground rounded-lg py-2 text-sm flex items-center justify-center gap-1.5 transition-colors"
+              className="w-full bg-secondary border border-border hover:bg-accent text-muted-foreground hover:text-foreground rounded-lg py-2 text-sm flex items-center justify-center gap-1.5 transition-colors"
             >
               <Copy size={13} />
-              {copied ? "Copied!" : "Copy"}
-            </button>
-            <button
-              data-testid="btn-log-trade"
-              onClick={logTrade}
-              disabled={createTrade.isPending}
-              className="flex-1 bg-green-500/15 border border-green-500/40 hover:bg-green-500/25 text-green-400 rounded-lg py-2 text-sm flex items-center justify-center gap-1.5 transition-colors disabled:opacity-60"
-            >
-              <Send size={13} />
-              {createTrade.isPending ? "Saving..." : "Log Trade"}
+              {copied ? "✅ Copied!" : "📋 Copy for Telegram"}
             </button>
           </div>
         </div>
       )}
-
-      {/* Chat input cosmetic */}
-      <div className="flex items-center gap-2 px-1 py-2 border-t border-border/50 mt-1">
-        <div className="flex-1 bg-background border border-border rounded-full px-4 py-2 text-sm text-muted-foreground select-none">
-          Message LotCalc Bot...
-        </div>
-        <button
-          data-testid="btn-send"
-          onClick={calculate}
-          className="w-9 h-9 bg-primary rounded-full flex items-center justify-center flex-shrink-0 hover:bg-primary/80 transition-colors"
-        >
-          <Send size={15} className="text-white" />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function BotBubble({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="bg-secondary border border-border rounded-tl rounded-tr-2xl rounded-br-2xl rounded-bl-2xl px-3.5 py-2.5 max-w-[88%] self-start">
-      <div className="text-[11px] text-primary font-semibold mb-1 font-mono">LotCalc Bot</div>
-      <div className="text-sm leading-relaxed">{children}</div>
-    </div>
-  );
-}
-
-function FieldGroup({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="mb-3">
-      <div className="text-[11px] text-muted-foreground font-mono uppercase tracking-wide mb-1.5">{label}</div>
-      {children}
-    </div>
-  );
-}
-
-function ResultRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex justify-between items-center py-1.5 border-b border-border/40 last:border-0 text-sm">
-      <span className="text-muted-foreground text-[12px]">{label}</span>
-      {children}
     </div>
   );
 }
