@@ -40,8 +40,8 @@ interface Result {
   balNGN: number;
 }
 
-function fmt(n: number): string {
-  return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+function fmt(n: number | string): string {
+  return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
 function TgInput({
